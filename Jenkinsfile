@@ -1,7 +1,3 @@
-cp Jenkinsfile Jenkinsfile.backup.$(date +%Y%m%d_%H%M%S)
-
-# Create new Jenkinsfile with the fix
-cat > Jenkinsfile << 'EOF'
 pipeline {
     agent any
     options {
@@ -291,7 +287,7 @@ pipeline {
                                 </tr>
                                 <tr>
                                     <td><strong>Notification Sent To</strong></td>
-                                    <td>${env.NOTIFICATION_EMAIL}</td
+                                    <td>${env.NOTIFICATION_EMAIL}</td>
                                 </tr>
                             </table>
                             
@@ -341,6 +337,3 @@ pipeline {
         }
     }
 }
-EOF
-
-echo "✅ Jenkinsfile updated!"
