@@ -1,3 +1,8 @@
+# Backup current Jenkinsfile
+cp Jenkinsfile Jenkinsfile.backup.$(date +%Y%m%d_%H%M%S)
+
+# Create new Jenkinsfile with the fix
+cat > Jenkinsfile << 'EOF'
 pipeline {
     agent any
     options {
@@ -136,7 +141,7 @@ pipeline {
         success {
             echo '✅ Pipeline completed successfully!'
             emailext(
-                to: "${env.NOTIFICATION_EMAIL}",  // Uses hardcoded email
+                to: "${env.NOTIFICATION_EMAIL}",
                 subject: "✅ SUCCESS: Selenium Tests Passed - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """
                     <html>
@@ -212,6 +217,7 @@ pipeline {
                             </div>
                             
                             <h2>Quick Links</h2>
+                            <ul>
                                 <li><a href="${env.BUILD_URL}">View Build Details</a></li>
                                 <li><a href="${env.BUILD_URL}console">View Console Output</a></li>
                                 <li><a href="${env.BUILD_URL}changes">View Changes</a></li>
@@ -234,7 +240,7 @@ pipeline {
         failure {
             echo '❌ Pipeline failed!'
             emailext(
-                to: "${env.NOTIFICATION_EMAIL}",  // Uses hardcoded email
+                to: "${env.NOTIFICATION_EMAIL}",
                 subject: "❌ FAILURE: Selenium Tests Failed - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """
                     <html>
@@ -286,7 +292,7 @@ pipeline {
                                 </tr>
                                 <tr>
                                     <td><strong>Notification Sent To</strong></td>
-                                    <td>${env.NOTIFICATION_EMAIL}</td>
+                                    <td>${env.NOTIFICATION_EMAIL}</td
                                 </tr>
                             </table>
                             
@@ -336,3 +342,6 @@ pipeline {
         }
     }
 }
+EOF
+
+echo "✅ Jenkinsfile updated!"
