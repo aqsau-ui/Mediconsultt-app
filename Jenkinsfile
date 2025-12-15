@@ -80,7 +80,17 @@ pipeline {
             steps {
                 echo '📦 Installing test dependencies...'
                 sh '''
-                    pip3 install -r tests/requirements-test.txt || pip install -r tests/requirements-test.txt
+                    # Create virtual environment to avoid "externally-managed-environment" error
+                    python3 -m venv /tmp/test_venv
+                    source /tmp/test_venv/bin/activate
+                    
+                    # Install test dependencies in virtual environment
+                    pip install --upgrade pip
+                    pip install -r tests/requirements-test.txt
+                    
+                    # Verify installation
+                    pip list | grep -E "selenium|pytest" || true
+                    echo "✓ Virtual environment created and dependencies installed"
                 '''
                 echo '✓ Test dependencies installed'
             }
@@ -92,8 +102,12 @@ pipeline {
                 script {
                     try {
                         sh '''
+                            # Activate virtual environment
+                            source /tmp/test_venv/bin/activate
+                            
+                            # Run tests
                             cd tests
-                            python3 test_mediconsult.py || python test_mediconsult.py
+                            python test_mediconsult.py || python3 test_mediconsult.py
                         '''
                         echo '✅ All tests passed!'
                     } catch (Exception e) {
@@ -109,6 +123,9 @@ pipeline {
                 echo '🧹 Cleaning up containers...'
                 sh '''
                     docker compose -f docker-compose.yml down
+                    
+                    # Clean up virtual environment
+                    rm -rf /tmp/test_venv || true
                 '''
                 echo '✓ Cleanup complete'
             }
@@ -311,6 +328,9 @@ pipeline {
             sh '''
                 # Ensure all containers are stopped
                 docker compose -f docker-compose.yml down || true
+                
+                # Clean up virtual environment
+                rm -rf /tmp/test_venv || true
             '''
             echo "Pipeline execution completed at: ${new Date()}"
         }
