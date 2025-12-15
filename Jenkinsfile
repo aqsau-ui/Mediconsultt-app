@@ -1,4 +1,3 @@
-# Backup current Jenkinsfile
 cp Jenkinsfile Jenkinsfile.backup.$(date +%Y%m%d_%H%M%S)
 
 # Create new Jenkinsfile with the fix
