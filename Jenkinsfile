@@ -1,5 +1,8 @@
 pipeline {
     agent any
+    options {
+        timeout(time: 60, unit: 'MINUTES')
+    }
     
     environment {
         DOCKER_IMAGE = 'aqsaimtiaz/mediconsult-app'
