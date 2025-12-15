@@ -57,20 +57,20 @@ pipeline {
         
         stage('Start Application Stack') {
             steps {
-                echo '🚀 Starting application with docker-compose...'
+                echo '🚀 Starting application with docker compose...'
                 sh '''
                     # Stop any existing containers
-                    docker-compose -f docker-compose.yml down || true
+                    docker compose -f docker-compose.yml down || true
                     
                     # Start fresh containers
-                    docker-compose -f docker-compose.yml up -d
+                    docker compose -f docker-compose.yml up -d
                     
                     # Wait for services to be ready
                     echo "Waiting for application to be ready..."
                     sleep 15
                     
                     # Verify containers are running
-                    docker-compose ps
+                    docker compose ps
                 '''
                 echo '✓ Application started successfully'
             }
@@ -108,7 +108,7 @@ pipeline {
             steps {
                 echo '🧹 Cleaning up containers...'
                 sh '''
-                    docker-compose -f docker-compose.yml down
+                    docker compose -f docker-compose.yml down
                 '''
                 echo '✓ Cleanup complete'
             }
@@ -310,7 +310,7 @@ pipeline {
             echo '🧹 Performing final cleanup...'
             sh '''
                 # Ensure all containers are stopped
-                docker-compose -f docker-compose.yml down || true
+                docker compose -f docker-compose.yml down || true
             '''
             echo "Pipeline execution completed at: ${new Date()}"
         }
