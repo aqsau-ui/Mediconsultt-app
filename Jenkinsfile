@@ -3,6 +3,8 @@ pipeline {
     
     environment {
         DOCKER_IMAGE = 'aqsaimtiaz/mediconsult-app'
+        // Hardcoded email for notifications
+        NOTIFICATION_EMAIL = 'aqsaimtiaz823@gmail.com'
         GIT_AUTHOR_EMAIL = ''
         GIT_AUTHOR_NAME = ''
     }
@@ -14,7 +16,7 @@ pipeline {
                 checkout scm
                 
                 script {
-                    // Extract Git author email and name for email notification
+                    // Extract Git author email and name for logging
                     try {
                         env.GIT_AUTHOR_EMAIL = sh(
                             script: "git log -1 --pretty=format:'%ae'",
@@ -29,14 +31,12 @@ pipeline {
                         echo "✓ Git Author: ${env.GIT_AUTHOR_NAME} <${env.GIT_AUTHOR_EMAIL}>"
                     } catch (Exception e) {
                         echo "⚠ Could not extract Git author info: ${e.message}"
-                        env.GIT_AUTHOR_EMAIL = 'qasimalik@gmail.com'
+                        env.GIT_AUTHOR_EMAIL = 'N/A'
                         env.GIT_AUTHOR_NAME = 'Unknown'
                     }
                     
-                    // Fallback if email is empty
-                    if (env.GIT_AUTHOR_EMAIL == '') {
-                        env.GIT_AUTHOR_EMAIL = 'qasimalik@gmail.com'
-                    }
+                    // Force use of hardcoded email for notifications
+                    echo "✓ Notification email set to: ${env.NOTIFICATION_EMAIL}"
                 }
             }
         }
@@ -116,7 +116,7 @@ pipeline {
         success {
             echo '✅ Pipeline completed successfully!'
             emailext(
-                to: "${env.GIT_AUTHOR_EMAIL}",
+                to: "${env.NOTIFICATION_EMAIL}",  // Uses hardcoded email
                 subject: "✅ SUCCESS: Selenium Tests Passed - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """
                     <html>
@@ -166,11 +166,15 @@ pipeline {
                                     <td><strong>Build URL</strong></td>
                                     <td><a href="${env.BUILD_URL}">${env.BUILD_URL}</a></td>
                                 </tr>
+                                <tr>
+                                    <td><strong>Notification Sent To</strong></td>
+                                    <td>${env.NOTIFICATION_EMAIL}</td>
+                                </tr>
                             </table>
                             
                             <h2>Test Results Summary</h2>
                             <div class="details">
-                                <p>✅ <strong>All 12 Selenium tests passed successfully!</strong></p>
+                                <p>✅ <strong>All Selenium tests passed successfully!</strong></p>
                                 <ul>
                                     <li>Homepage load test ✓</li>
                                     <li>Patient registration test ✓</li>
@@ -188,17 +192,10 @@ pipeline {
                             </div>
                             
                             <h2>Quick Links</h2>
-                            <ul>
                                 <li><a href="${env.BUILD_URL}">View Build Details</a></li>
                                 <li><a href="${env.BUILD_URL}console">View Console Output</a></li>
                                 <li><a href="${env.BUILD_URL}changes">View Changes</a></li>
                             </ul>
-                            
-                            <h2>Git Commit Information</h2>
-                            <div class="details">
-                                <p><strong>Commit:</strong> ${env.GIT_COMMIT}</p>
-                                <p><strong>Branch:</strong> ${env.GIT_BRANCH}</p>
-                            </div>
                         </div>
                         
                         <div class="footer">
@@ -208,17 +205,16 @@ pipeline {
                     </body>
                     </html>
                 """,
-                mimeType: 'text/html',
-                attachLog: true
+                mimeType: 'text/html'
             )
             
-            echo "✉ Success email sent to: ${env.GIT_AUTHOR_EMAIL}"
+            echo "✉ Success email sent to: ${env.NOTIFICATION_EMAIL}"
         }
         
         failure {
             echo '❌ Pipeline failed!'
             emailext(
-                to: "${env.GIT_AUTHOR_EMAIL}",
+                to: "${env.NOTIFICATION_EMAIL}",  // Uses hardcoded email
                 subject: "❌ FAILURE: Selenium Tests Failed - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """
                     <html>
@@ -268,6 +264,10 @@ pipeline {
                                     <td><strong>Build URL</strong></td>
                                     <td><a href="${env.BUILD_URL}">${env.BUILD_URL}</a></td>
                                 </tr>
+                                <tr>
+                                    <td><strong>Notification Sent To</strong></td>
+                                    <td>${env.NOTIFICATION_EMAIL}</td>
+                                </tr>
                             </table>
                             
                             <h2>Failure Details</h2>
@@ -288,12 +288,6 @@ pipeline {
                                 <li><a href="${env.BUILD_URL}console">View Console Output (Check Here First!)</a></li>
                                 <li><a href="${env.BUILD_URL}changes">View Changes</a></li>
                             </ul>
-                            
-                            <h2>Git Commit Information</h2>
-                            <div class="details">
-                                <p><strong>Commit:</strong> ${env.GIT_COMMIT}</p>
-                                <p><strong>Branch:</strong> ${env.GIT_BRANCH}</p>
-                            </div>
                         </div>
                         
                         <div class="footer">
@@ -303,11 +297,10 @@ pipeline {
                     </body>
                     </html>
                 """,
-                mimeType: 'text/html',
-                attachLog: true
+                mimeType: 'text/html'
             )
             
-            echo "✉ Failure email sent to: ${env.GIT_AUTHOR_EMAIL}"
+            echo "✉ Failure email sent to: ${env.NOTIFICATION_EMAIL}"
         }
         
         always {
