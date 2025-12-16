@@ -30,19 +30,22 @@ pipeline {
                     docker compose down || true
                     docker compose up -d
                     
-                    # Wait for MongoDB to be ready
-                    echo "Waiting for MongoDB..."
-                    sleep 15
+                    # Wait for MongoDB healthcheck to pass
+                    echo "Waiting for MongoDB to be healthy..."
+                    timeout 60 bash -c 'until docker inspect mediconsult_mongodb --format="{{.State.Health.Status}}" | grep -q "healthy"; do echo "MongoDB not healthy yet..."; sleep 5; done' || true
                     
-                    # Wait for app to connect to MongoDB
-                    echo "Waiting for application..."
-                    sleep 15
+                    # Wait for app to fully start
+                    echo "Waiting for application to start..."
+                    sleep 10
                     
                     echo "=== CONTAINER STATUS ==="
                     docker compose ps
                     
+                    echo "=== HEALTH STATUS ==="
+                    docker inspect mediconsult_mongodb --format="MongoDB Health: {{.State.Health.Status}}" || true
+                    
                     echo "=== LOGS ==="
-                    docker compose logs --tail=20
+                    docker compose logs --tail=30
                     
                     echo "=== APPLICATION TEST ==="
                     curl -f http://localhost:8501 && echo "✅ App is running" || echo "⚠ Check manually"
