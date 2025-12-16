@@ -1,5 +1,3 @@
-# Create completely new Jenkinsfile
-@'
 pipeline {
     agent any
     
@@ -31,10 +29,20 @@ pipeline {
                 sh """
                     docker compose down || true
                     docker compose up -d
-                    sleep 20
+                    
+                    # Wait for MongoDB to be ready
+                    echo "Waiting for MongoDB..."
+                    sleep 15
+                    
+                    # Wait for app to connect to MongoDB
+                    echo "Waiting for application..."
+                    sleep 15
                     
                     echo "=== CONTAINER STATUS ==="
                     docker compose ps
+                    
+                    echo "=== LOGS ==="
+                    docker compose logs --tail=20
                     
                     echo "=== APPLICATION TEST ==="
                     curl -f http://localhost:8501 && echo "✅ App is running" || echo "⚠ Check manually"
@@ -65,7 +73,3 @@ pipeline {
         }
     }
 }
-'@ | Out-File -FilePath Jenkinsfile -Encoding UTF8
-
-# Verify it was created
-type Jenkinsfile
