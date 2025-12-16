@@ -1,0 +1,43 @@
+version: '3.8'
+
+# Part II: Jenkins CI/CD docker-compose
+# Differences from Part I:
+# - Mounts code as volume instead of using built image
+# - Different port (8502 instead of 8501)
+# - Different container names (_ci suffix)
+
+services:
+  # MongoDB Database Service
+  mongodb_ci:
+    image: mongo:latest
+    container_name: mediconsult_mongodb_ci
+    ports:
+      - "27018:27017"  # Different host port
+    volumes:
+      - mongodb_data_ci:/data/db  # Persistent volume for database
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  # Web Application Service (with code volume mount)
+  web_ci:
+    build: .  # Build from local Dockerfile
+    container_name: mediconsult_web_ci
+    ports:
+      - "8502:8501"  # Different host port for CI environment
+    environment:
+      - MONGODB_URI=mongodb://mongodb_ci:27017/
+    volumes:
+      - ./:/app  # Mount code as volume (Part II requirement)
+    depends_on:
+      mongodb_ci:
+        condition: service_healthy
+    restart: unless-stopped
+
+# Named volume for data persistence
+volumes:
+  mongodb_data_ci:

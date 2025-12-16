@@ -25,30 +25,31 @@ pipeline {
         
         stage("Deploy Application") {
             steps {
-                echo "🚀 Deploying application..."
+                echo "🚀 Deploying CI application..."
                 sh """
-                    docker compose down || true
-                    docker compose up -d
+                    # Use CI docker-compose file (Part II requirement)
+                    docker-compose -f docker-compose-ci.yml down || true
+                    docker-compose -f docker-compose-ci.yml up -d --build
                     
                     # Wait for MongoDB healthcheck to pass
                     echo "Waiting for MongoDB to be healthy..."
-                    timeout 60 bash -c 'until docker inspect mediconsult_mongodb --format="{{.State.Health.Status}}" | grep -q "healthy"; do echo "MongoDB not healthy yet..."; sleep 5; done' || true
+                    timeout 60 bash -c 'until docker inspect mediconsult_mongodb_ci --format="{{.State.Health.Status}}" | grep -q "healthy"; do echo "MongoDB not healthy yet..."; sleep 5; done' || true
                     
                     # Wait for app to fully start
                     echo "Waiting for application to start..."
                     sleep 10
                     
                     echo "=== CONTAINER STATUS ==="
-                    docker compose ps
+                    docker-compose -f docker-compose-ci.yml ps
                     
                     echo "=== HEALTH STATUS ==="
-                    docker inspect mediconsult_mongodb --format="MongoDB Health: {{.State.Health.Status}}" || true
+                    docker inspect mediconsult_mongodb_ci --format="MongoDB Health: {{.State.Health.Status}}" || true
                     
                     echo "=== LOGS ==="
-                    docker compose logs --tail=30
+                    docker-compose -f docker-compose-ci.yml logs --tail=30
                     
                     echo "=== APPLICATION TEST ==="
-                    curl -f http://localhost:8501 && echo "✅ App is running" || echo "⚠ Check manually"
+                    curl -f http://localhost:8502 && echo "✅ CI App is running on port 8502" || echo "⚠ Check manually"
                 """
             }
         }
