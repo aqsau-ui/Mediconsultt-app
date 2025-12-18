@@ -1,0 +1,66 @@
+version: '3.8'
+
+# Docker Compose for Testing Environment
+# This runs the app + MongoDB + Selenium tests
+
+services:
+  # MongoDB for testing
+  mongodb_test:
+    image: mongo:latest
+    container_name: mediconsult_mongodb_test
+    ports:
+      - "27019:27017"
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - test_network
+
+  # Web application for testing
+  web_test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mediconsult_web_test
+    ports:
+      - "8501:8501"
+    environment:
+      - MONGODB_URI=mongodb://mongodb_test:27017/
+    depends_on:
+      mongodb_test:
+        condition: service_healthy
+    networks:
+      - test_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Selenium test runner
+  selenium_tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: mediconsult_selenium_tests
+    environment:
+      - BASE_URL=http://web_test:8501
+    depends_on:
+      web_test:
+        condition: service_healthy
+    networks:
+      - test_network
+    volumes:
+      - ./tests:/app/tests
+      - ./test-results:/app/test-results
+
+networks:
+  test_network:
+    driver: bridge
+
+volumes:
+  mongodb_data_test:

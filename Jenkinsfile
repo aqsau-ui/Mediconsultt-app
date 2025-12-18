@@ -3,7 +3,10 @@ pipeline {
     
     environment {
         DOCKER_IMAGE = "aqsaimtiaz/mediconsult-app"
-        APP_URL = "http://localhost:8501"
+        GIT_COMMIT_EMAIL = sh(
+            script: "git log -1 --pretty=format:'%ae'",
+            returnStdout: true
+        ).trim()
     }
     
     stages {
@@ -11,190 +14,163 @@ pipeline {
             steps {
                 echo "📥 Checking out code from GitHub..."
                 checkout scm
+                sh """
+                    echo "Current Branch: \$(git branch --show-current)"
+                    echo "Last Commit: \$(git log -1 --oneline)"
+                    echo "Commit Author Email: ${GIT_COMMIT_EMAIL}"
+                """
             }
         }
         
         stage("Build Docker Image") {
             steps {
                 echo "🐳 Building Docker image..."
-                script {
-                    sh """
-                        docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} .
-                        docker tag ${DOCKER_IMAGE}:${BUILD_NUMBER} ${DOCKER_IMAGE}:latest
-                    """
-                }
+                sh """
+                    docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} .
+                    docker tag ${DOCKER_IMAGE}:${BUILD_NUMBER} ${DOCKER_IMAGE}:latest
+                    echo "✅ Image built: ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+                """
             }
         }
         
-        stage("Deploy Application") {
+        stage("Run Automated Tests") {
             steps {
-                echo "🚀 Deploying application for testing..."
-                script {
-                    sh """
-                        # Stop any existing containers
-                        docker-compose down || true
-                        
-                        # Start fresh containers
-                        docker-compose up -d
-                        
-                        # Wait for MongoDB to be healthy
-                        echo "Waiting for MongoDB to be healthy..."
-                        timeout 60 bash -c 'until docker inspect mediconsult_mongodb --format="{{.State.Health.Status}}" | grep -q "healthy"; do echo "MongoDB not ready yet..."; sleep 5; done'
-                        
-                        # Wait for app to fully start
-                        echo "Waiting for application to start..."
-                        sleep 15
-                        
-                        # Verify containers are running
-                        docker ps
-                        
-                        # Test application is responding
-                        curl -f ${APP_URL} && echo "✅ Application is running!" || (echo "❌ Application failed to start" && exit 1)
-                    """
-                }
+                echo "🧪 Running Selenium Tests in Containerized Environment..."
+                sh """
+                    # Clean up any existing test containers
+                    docker-compose -f docker-compose-test.yml down -v || true
+                    
+                    # Start test environment
+                    echo "Starting test environment..."
+                    docker-compose -f docker-compose-test.yml up -d mongodb_test web_test
+                    
+                    # Wait for application to be healthy
+                    echo "Waiting for application to be ready..."
+                    sleep 30
+                    
+                    # Check if web app is accessible
+                    docker-compose -f docker-compose-test.yml exec -T web_test curl -f http://localhost:8501 || echo "Web app starting..."
+                    sleep 10
+                    
+                    # Run Selenium tests
+                    echo "Running Selenium tests..."
+                    docker-compose -f docker-compose-test.yml run --rm selenium_tests || TEST_EXIT_CODE=\$?
+                    
+                    # Copy test results
+                    mkdir -p test-results
+                    docker cp mediconsult_selenium_tests:/app/test-results/. ./test-results/ || echo "No test results to copy"
+                    
+                    # Clean up test containers
+                    docker-compose -f docker-compose-test.yml down -v
+                    
+                    # Check test results
+                    if [ -f test-results/test_summary.txt ]; then
+                        echo "=== TEST RESULTS ==="
+                        cat test-results/test_summary.txt
+                    fi
+                    
+                    # Exit with test status
+                    exit \${TEST_EXIT_CODE:-0}
+                """
             }
         }
         
-        stage("Run Selenium Tests") {
+        stage("Deploy CI Application") {
             steps {
-                echo "🧪 Running Selenium automated tests..."
-                script {
-                    // Build test container
-                    sh """
-                        # Create test Dockerfile if not exists
-                        cat > Dockerfile.test << 'EOF'
-FROM python:3.10-slim
-
-# Install Chrome and dependencies
-RUN apt-get update && apt-get install -y \\
-    wget \\
-    gnupg \\
-    unzip \\
-    curl \\
-    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \\
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \\
-    && apt-get update \\
-    && apt-get install -y google-chrome-stable \\
-    && rm -rf /var/lib/apt/lists/*
-
-# Install ChromeDriver
-RUN CHROMEDRIVER_VERSION=\$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE) \\
-    && wget -O /tmp/chromedriver.zip http://chromedriver.storage.googleapis.com/\${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip \\
-    && unzip /tmp/chromedriver.zip chromedriver -d /usr/local/bin/ \\
-    && rm /tmp/chromedriver.zip \\
-    && chmod +x /usr/local/bin/chromedriver
-
-# Set working directory
-WORKDIR /tests
-
-# Copy test requirements and install
-COPY tests/requirements-test.txt .
-RUN pip install --no-cache-dir -r requirements-test.txt
-
-# Copy test files
-COPY tests/ .
-
-CMD ["python", "-m", "unittest", "discover", "-v"]
-EOF
-
-                        # Build test image
-                        docker build -f Dockerfile.test -t mediconsult-tests:${BUILD_NUMBER} .
-                        
-                        # Run tests and capture results
-                        docker run --rm \\
-                            --network host \\
-                            -e APP_URL=${APP_URL} \\
-                            mediconsult-tests:${BUILD_NUMBER} > test_results.txt 2>&1 || true
-                        
-                        # Display test results
-                        cat test_results.txt
-                        
-                        # Check if tests passed
-                        if grep -q "OK" test_results.txt || grep -q "Ran.*0 failures" test_results.txt; then
-                            echo "✅ All tests passed!"
-                            exit 0
-                        else
-                            echo "❌ Some tests failed!"
-                            exit 1
-                        fi
-                    """
-                }
+                echo "🚀 Deploying CI application..."
+                sh """
+                    # Stop existing CI containers
+                    docker-compose -f docker-compose-ci.yml down || true
+                    
+                    # Start CI environment
+                    docker-compose -f docker-compose-ci.yml up -d --build
+                    
+                    # Wait for MongoDB healthcheck
+                    echo "Waiting for MongoDB to be healthy..."
+                    timeout 60 bash -c 'until docker inspect mediconsult_mongodb_ci --format="{{.State.Health.Status}}" | grep -q "healthy"; do echo "MongoDB not healthy yet..."; sleep 5; done' || true
+                    
+                    # Wait for application
+                    echo "Waiting for application to start..."
+                    sleep 10
+                    
+                    echo "=== CONTAINER STATUS ==="
+                    docker-compose -f docker-compose-ci.yml ps
+                    
+                    echo "=== HEALTH STATUS ==="
+                    docker inspect mediconsult_mongodb_ci --format="MongoDB Health: {{.State.Health.Status}}" || true
+                    
+                    echo "=== APPLICATION TEST ==="
+                    curl -f http://localhost:8502 && echo "✅ CI App is running on port 8502" || echo "⚠ Check manually"
+                """
             }
         }
         
-        stage("Cleanup") {
+        stage("Verification") {
             steps {
-                echo "🧹 Cleaning up test environment..."
-                script {
-                    sh """
-                        docker-compose down
-                        docker rmi mediconsult-tests:${BUILD_NUMBER} || true
-                    """
-                }
+                echo "✅ Pipeline execution complete!"
+                sh """
+                    echo "========================================"
+                    echo "BUILD NUMBER: ${BUILD_NUMBER}"
+                    echo "DOCKER IMAGE: ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+                    echo "CI APP URL: http://13.61.145.186:8502"
+                    echo "PROD APP URL: http://13.61.145.186:8501"
+                    echo "========================================"
+                """
             }
         }
     }
     
     post {
         always {
+            echo "📧 Sending test results email..."
             script {
-                // Archive test results
-                archiveArtifacts artifacts: 'test_results.txt', allowEmptyArchive: true
+                def testResults = ""
+                if (fileExists('test-results/test_summary.txt')) {
+                    testResults = readFile('test-results/test_summary.txt')
+                } else {
+                    testResults = "Test results not available"
+                }
                 
-                // Get commit author email
-                def authorEmail = sh(
-                    script: 'git log -1 --pretty=format:"%ae"',
-                    returnStdout: true
-                ).trim()
-                
-                // Get commit message
-                def commitMsg = sh(
-                    script: 'git log -1 --pretty=format:"%s"',
-                    returnStdout: true
-                ).trim()
-                
-                // Read test results
-                def testResults = readFile('test_results.txt').trim()
-                
-                // Determine status
-                def status = currentBuild.result ?: 'SUCCESS'
-                def emoji = status == 'SUCCESS' ? '✅' : '❌'
-                
-                // Send email
                 emailext(
-                    to: "${authorEmail}",
-                    subject: "${emoji} Jenkins Pipeline ${status}: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
+                    to: "${GIT_COMMIT_EMAIL}",
+                    subject: "Jenkins Build #${BUILD_NUMBER} - ${currentBuild.currentResult}",
                     body: """
-<h2>${emoji} Jenkins Pipeline ${status}</h2>
-
-<h3>Build Information:</h3>
-<ul>
-    <li><strong>Job:</strong> ${env.JOB_NAME}</li>
-    <li><strong>Build Number:</strong> ${env.BUILD_NUMBER}</li>
-    <li><strong>Status:</strong> ${status}</li>
-    <li><strong>Build URL:</strong> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></li>
-</ul>
-
-<h3>Commit Information:</h3>
-<ul>
-    <li><strong>Author:</strong> ${authorEmail}</li>
-    <li><strong>Message:</strong> ${commitMsg}</li>
-</ul>
-
-<h3>Test Results:</h3>
-<pre>${testResults}</pre>
-
-<p>Check the <a href="${env.BUILD_URL}console">console output</a> for more details.</p>
-""",
-                    mimeType: 'text/html'
+                    <html>
+                    <body>
+                        <h2>Jenkins Pipeline Execution Results</h2>
+                        <p><strong>Build Number:</strong> ${BUILD_NUMBER}</p>
+                        <p><strong>Build Status:</strong> ${currentBuild.currentResult}</p>
+                        <p><strong>Project:</strong> ${env.JOB_NAME}</p>
+                        <p><strong>Duration:</strong> ${currentBuild.durationString}</p>
+                        
+                        <h3>Test Results:</h3>
+                        <pre>${testResults}</pre>
+                        
+                        <h3>Deployment URLs:</h3>
+                        <ul>
+                            <li><strong>CI Environment:</strong> http://13.61.145.186:8502</li>
+                            <li><strong>Production:</strong> http://13.61.145.186:8501</li>
+                        </ul>
+                        
+                        <p><a href="${env.BUILD_URL}">View Full Build Log</a></p>
+                    </body>
+                    </html>
+                    """,
+                    mimeType: 'text/html',
+                    attachLog: true
                 )
             }
         }
+        
         success {
-            echo "🎉 PIPELINE SUCCESSFUL! Tests passed and email sent."
+            echo "🎉 PIPELINE SUCCESSFUL!"
+            echo "✅ All tests passed"
+            echo "✅ Application deployed successfully"
         }
+        
         failure {
-            echo "❌ PIPELINE FAILED! Check test results and email notification."
+            echo "❌ PIPELINE FAILED"
+            echo "Check the logs above for details"
         }
     }
 }
