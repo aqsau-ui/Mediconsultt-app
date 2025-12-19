@@ -1,3 +1,4 @@
+
 # OPTIMIZED VERSION - Add cache and skip unnecessary packages
 FROM python:3.10-slim
 
