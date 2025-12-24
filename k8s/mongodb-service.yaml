@@ -1,0 +1,17 @@
+# MongoDB Service (NodePort)
+# Exposes MongoDB for internal communication and external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  labels:
+    app: mongodb
+spec:
+  type: NodePort
+  selector:
+    app: mongodb
+  ports:
+  - protocol: TCP
+    port: 27017
+    targetPort: 27017
+    nodePort: 30017

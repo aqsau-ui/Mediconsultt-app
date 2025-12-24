@@ -1,0 +1,12 @@
+# Persistent Volume Claim for MongoDB
+# This ensures database data remains persistent across pod restarts
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

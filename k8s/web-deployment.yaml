@@ -1,0 +1,32 @@
+# MediConsult Web Application Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mediconsult-web-deployment
+  labels:
+    app: mediconsult-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mediconsult-web
+  template:
+    metadata:
+      labels:
+        app: mediconsult-web
+    spec:
+      containers:
+      - name: mediconsult-web
+        image: aqsaimtiaz/mediconsult-app:latest
+        ports:
+        - containerPort: 8501
+        env:
+        - name: MONGODB_URI
+          value: "mongodb://mongodb:27017/"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

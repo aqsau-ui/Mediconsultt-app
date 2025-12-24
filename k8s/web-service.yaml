@@ -1,0 +1,17 @@
+# MediConsult Web Service (NodePort)
+# Exposes the web application externally
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediconsult-web-service
+  labels:
+    app: mediconsult-web
+spec:
+  type: NodePort
+  selector:
+    app: mediconsult-web
+  ports:
+  - protocol: TCP
+    port: 8501
+    targetPort: 8501
+    nodePort: 30501
